@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Alife.Foundation;
 using Alife.Function.FunctionCaller;
 
 namespace Alife.QQOfficial;
@@ -284,10 +285,11 @@ public partial class QQOfficialModule
         {
             throw new Exception("配置「语音·编码器参数」里必须同时有 {in} 与 {out} 两个占位符");
         }
-        string ffmpeg = FindTool("ffmpeg.exe");
+        string ffmpeg = FindFfmpeg();
         if (ffmpeg.Length == 0)
         {
-            throw new Exception("转 silk 需要 ffmpeg 先把音频解成 pcm，但 PATH 上找不到 ffmpeg.exe");
+            throw new Exception("转 silk 需要 ffmpeg 先把音频解成 pcm，但自带运行时与 PATH 上都找不到 ffmpeg"
+                + "（本插件清单已把 imageio-ffmpeg 声明成 pip 依赖，让宿主同步一次插件环境就会带上一份）");
         }
         string work = Path.Combine(Path.GetTempPath(), "qqofficial_voice_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(work);
@@ -336,6 +338,41 @@ public partial class QQOfficialModule
         }
         return "";
     }
+
+    /// <summary>ffmpeg 取值优先级：自带运行时的 imageio-ffmpeg → PATH。宿主热编译按平台注入符号，可执行文件后缀要按平台取。</summary>
+    static string FindFfmpeg()
+    {
+        string bundled = FindBundledFfmpeg();
+        return bundled.Length > 0 ? bundled : FindTool(ExecutableName("ffmpeg"));
+    }
+
+    /// <summary>imageio-ffmpeg 这个 pip 包把成品 ffmpeg 放在包内 binaries 目录，文件名带版本号且会变，只能通配找。</summary>
+    static string FindBundledFfmpeg()
+    {
+        string runtimeRoot = AlifePath.RuntimeFolderPath;
+        if (Directory.Exists(runtimeRoot) == false)
+        {
+            return "";
+        }
+        foreach (string python in Directory.GetDirectories(runtimeRoot, "Python*"))
+        {
+            string binaries = Path.Combine(python, "Lib", "site-packages", "imageio_ffmpeg", "binaries");
+            if (Directory.Exists(binaries) == false)
+            {
+                continue;
+            }
+            foreach (string file in Directory.GetFiles(binaries, "ffmpeg-*"))
+            {
+                if (file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || OperatingSystem.IsWindows() == false)
+                {
+                    return file;
+                }
+            }
+        }
+        return "";
+    }
+
+    static string ExecutableName(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
 
     static async Task<(int ExitCode, string Error)> RunToolAsync(string program, string arguments)
     {

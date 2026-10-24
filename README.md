@@ -5,7 +5,13 @@
 目标 ID 全是 32 位十六进制 openid，不是 QQ 号也不是群号。只依赖 `Alife.Function.FunctionCaller`，不需要任何 NuGet 包。
 
 ## 版本
-4.0.0（对应 Alife 客户端 4.2.x）
+5.0.0（对应 Alife 客户端 5.0.x；本机 5.0.2 在役客户端已热编译装载成功）
+
+## 5.0.0 的改动
+- 版本号对齐客户端主版本（官方约定：插件版本首位应与客户端一致，`PluginSystem.IsClientCompatible` 按主版本判定）
+- 清单新增 `Environments.pip: imageio-ffmpeg`：ffmpeg 那一步由宿主同步插件环境时自动带上，转 silk 的解码步骤不再要求你手动装 ffmpeg（编码仍要你自备 pilk，见「语音·silk 编码器」说明）
+- ffmpeg 查找顺序改为：自带运行时的 imageio-ffmpeg → PATH；可执行文件后缀按平台取，不再写死 `.exe`
+- 修正「语音·silk 编码器」的说明文本：原来那串示例路径被转义吃掉过（`	` 变成制表符），现在不带写死的盘符路径
 
 ## 一句话架构
 **Alife 自己就是那个 Agent。** 本插件里没有一条业务判断——谁该回、回什么、要不要合并成一条，全是主 Agent 决定的；插件只管协议层该管的事：token 生命周期、网关握手与重连、事件去重、被动回复额度记账、错误码翻译成人话。
@@ -85,8 +91,10 @@
 ## 验证口径（重要）
 `api.bot.qq.com` **已用真凭据跑通过一段**：token 取到了、群消息发送接口通了（第一次真反馈就是 `HTTP 400 + err_code 40054005`，暴露出本插件没发 `msg_seq` 的问题，已在 4.0.0 内修掉：同一 `msg_id` 现在自动递增 `msg_seq`，且非 2xx 时先读 body 的 `err_code` 再退化成 HTTP 状态码）。但**"改完就好"这句我没有依据**——修完还没在真接口复跑。其余仍是离线验证：
 
-- 编译门 `.buildcheck/QQOfficialCheck.csproj`（镜像热编译）`--no-incremental` **0 警告 0 错误**
-- `scratch/QQOfficialProbe` 反射探针 **194 项 0 失败**（`bash scratch/QQOfficialProbe/run.sh` 一条命令跑完，自己起停两个假服务）：JSON 取值（数字/字符串两种形态、Unix 秒与 RFC3339 时间戳）、错误判定（`err_code`/`code`/0 值/数组体/`msg` 兜底）与码表话术、intents 位组合与 4014 提示、键盘 ≤5×≤5 与 `style∈{0,1}` 与 `action.data≤100` 校验、ark 模板只认 23/24/37 与 kv 的 value/obj 形状、菜单 10 项/子菜单 5 项/名字权重（汉字算 2）/链接必须 https、被动回复额度（群 5 次、单聊 4 次、窗口过期放行）、事件按 id 去重、路径拼装
+2026-10-24 用同一份凭据只做只读复验（没发任何消息）：`POST /app/getAppAccessToken` 实回 79 字符 token 与 `expires_in=7200`；`GET /gateway/bot` 实回 `url = wss://api.sgroup.qq.com/websocket`（生产网关在 sgroup 域名，不是 api.bot.qq.com）、`shards`、`session_start_limit{max_concurrency,remaining,reset_after,total}`，**没有 `sessions` 这个键**，本插件按 `url` 走所以不受影响。`GET /v2/users/@me/guilds` 与 `/v2/guilds/mine/groups` 实回 `err_code 40011002` / `code 11001` / `message 不支持的调用`——这个 app 的能力集里没有频道类接口，两条码已收进码表。仍未复跑的还是那句：**真发出一条群消息并撤回**。
+
+- 编译门 `.buildcheck/Alife.QQOfficialHostCheck.csproj`（引在役客户端实现程序集，等价热编译）`--no-incremental` **0 错误**（CA1416/MSB3246 是实现集带来的噪音，判据只看 error）
+- `scratch/QQOfficialProbe` 反射探针 **200 项 0 失败**（`bash scratch/QQOfficialProbe/run.sh` 一条命令跑完，自己起停两个假服务）：JSON 取值（数字/字符串两种形态、Unix 秒与 RFC3339 时间戳）、错误判定（`err_code`/`code`/0 值/数组体/`msg` 兜底）与码表话术、intents 位组合与 4014 提示、键盘 ≤5×≤5 与 `style∈{0,1}` 与 `action.data≤100` 校验、ark 模板只认 23/24/37 与 kv 的 value/obj 形状、菜单 10 项/子菜单 5 项/名字权重（汉字算 2）/链接必须 https、被动回复额度（群 5 次、单聊 4 次、窗口过期放行）、事件按 id 去重、路径拼装
 - 两个假服务把"未实机"这段的空补齐了大半：`scratch/qqofficial-mock.mjs` 是官方 OpenAPI 的 HTTP 假服务，`scratch/qqofficial-wsmock.mjs` 是网关的**手写 RFC6455 WebSocket 假服务**（本机没装 `ws` 包）。验到真握手与帧这一层：Hello 下发 `heartbeat_interval` → op2 IDENTIFY（token 前缀 / intents 位 / shard / properties）→ `READY` 拿 session → 心跳带回最新 `s` 并收 op11 → 平台发 op7 后确实重连；另两种异常剧本也演了：**4014 连撞三次停止重连**、**op9 会话作废后从 RESUME 退回 IDENTIFY**。HTTP 侧验了 token 缓存与提前续期、鉴权头、`err_code` 抛出、GET 重试一次而 POST 一次都不重试、网关地址问不到时的报错
 - 端点形状逐个抓自官方文档当前版本（`autogen/api/*`、素材管理与富媒体概述页、变更记录），不是我凭印象写的
 

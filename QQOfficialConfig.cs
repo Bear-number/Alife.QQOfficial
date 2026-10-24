@@ -62,7 +62,9 @@ public class QQOfficialConfig
 
     [DisplayName("语音·silk 编码器")]
     [Description("官方 file_type=3 只认 silk，mp3/wav/m4a 传上去会**掉成文件卡片**（不是语音条）。ffmpeg 只能解 silk 不能编，所以要用语音条必须自己给编码器："
-        + "本机推荐直接填 Alife 自带的解释器 D:AlifeRuntimePython312python.exe，参数指向本插件 tools	o_silk.py（它调 pilk 编码）。注意 pilk 只出到 cp311 的 Windows 轮子，3.12 装它要 Rust 工具链现编——装不上时先看「语音·放行非 silk 直传」能不能直接解决。留空则发语音会明确报错，不会假装成功")]
+        + "填一个真装了 pilk 的 python.exe 完整路径（自带运行时目录里 Python312 下的那个解释器也行，前提是它确实装上了 pilk），"
+        + "参数指向本插件目录里 tools 文件夹下的 to_silk.py（它调 pilk 编码，pcm 采样率必须与「语音·pcm 采样率」一致）。"
+        + "注意 pilk 在 PyPI 上只有源码包（0.2.4 没有 cp312 的 Windows 轮子），装它要 Rust 工具链现编——装不上就先看「语音·放行非 silk 直传」能不能解决，或用外部命令先转出 .silk。留空则发语音会明确报错，不会假装成功")]
     public string SilkEncoderPath { get; set; } = "";
 
     [DisplayName("语音·编码器参数")]

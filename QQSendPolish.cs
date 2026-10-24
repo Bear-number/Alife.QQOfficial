@@ -71,7 +71,7 @@ static class QQSendPolish
                 return "";
             }
             return "官方 file_type=3 只认 silk，" + extension + " 传上去会掉成文件卡片而不是语音条；（想拿真接口验一次就先打开「语音·放行非 silk 直传」）"
-                + "ffmpeg 只能解码 silk 不能编码，要发语音条请在配「语音·silk 编码器」（本机有 uv 的 3.11，pilk 有 cp311 轮子），或先把文件转成 .silk";
+                + "ffmpeg 只能解码 silk 不能编码，要发语音条请在配「语音·silk 编码器」（给一个装了 pilk 的 python.exe 与本插件 tools\\to_silk.py），或先用外部命令转出 .silk";
         }
         return "";
     }
